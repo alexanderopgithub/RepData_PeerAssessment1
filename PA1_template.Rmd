@@ -1,25 +1,125 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+output: html_document
+keep_md: true
 ---
 
 
-## Loading and preprocessing the data
+## Question 1: Loading and preprocessing the data ##
+We load the activity data from csv into dataframe activity0. The original data contains 17568 observations which is partially missing in variable steps. 
+
+```{r}
+activity0 <- read.csv("activity.csv")
+str(activity0) # 17568 observations
+```
+
+We remove the rows with missing data and obtain data frame activity.
+```{r}
+wd  <- complete.cases(activity0)
+activity = activity0[wd,] # 15264 left
+str(activity)
+```
+
+
+##Question 2: What is mean total number of steps taken per day? ##
+We use library dplyr to calculate the total number of steps per day. 
+
+```{r}
+library(dplyr)
+resQ2 <- activity %>%
+  group_by(date) %>%
+  summarize(totalsteps = sum(steps,na.rm=TRUE))
+```
+
+The mean and median are 
+```{r}
+mean(resQ2$totalsteps)
+median(resQ2$totalsteps)
+```
+
+Use library ggplot2 to create a histogram
+```{r}
+library(ggplot2)
+qplot(totalsteps,data = resQ2,bins = 10,xlab = "Total number of steps",main = "Total number of steps per day [remove rows missing values]")
+```
+
+## Question 3: What is the average daily activity pattern? ##
+Calculate the average number of steps taken averaged across all days in the dataset. 
+```{r}
+resQ3 <- activity %>%
+  group_by(interval) %>%
+  summarize(avsteps = mean(steps,na.rm=TRUE))
+```
+
+We find the maximum number of steps is on average made on interval 8:35
+```{r}
+maxsteps <- which.max(resQ3$avsteps)
+resQ3$interval[maxsteps]
+```
+
+This brings the following lineplot 
+```{r}
+qplot(interval,avsteps, data = resQ3, ylab= "Average number of steps", main = "Average number of steps per 5 minute interval") + geom_line()
+```
+
+## Question 4: Imputing missing values ##
+There were missing data in the original dataset. 
+
+```{r}
+wd  <- complete.cases(activity0)
+sum(!wd) # 2304 rows with NA
+```
+
+Above we took out the rows with missing values. Here we impute values. We recognize that we cannot add mean/median from that specific day
+as there are days which are completely NA. Thus we replace missing values with the mean for the 5 minute interval. 
+Create dataframe activity_ext which picks the original number of steps when it is available, and  otherwise the mean value.
+
+```{r}
+activity_ext <- merge(activity0,resQ3,by.x="interval",by.y="interval")
+activity_ext$steps2 = ifelse (is.na(activity_ext$steps), activity_ext$avsteps,activity_ext$steps)
+```
+
+And derive the total number of steps per day
+```{r}
+resQ4 <- activity_ext %>%
+  group_by(date) %>%
+  summarize(totalsteps = sum(steps2,na.rm=TRUE))
+```
+
+
+The mean and median have hardly changed from the above situation where we removed the rows
+```{r}
+mean(resQ4$totalsteps)
+median(resQ4$totalsteps)
+```
+
+The histogram becomes
+```{r}
+qplot(totalsteps,data = resQ4,bins = 10,xlab = "Total number of steps",main = "Total number of steps per day [imputed values]")
+```
+
+Thus we conclude the impact of imputing missing data versus deleting the rows is limited.
 
 
 
-## What is mean total number of steps taken per day?
+## Q5 Are there differences in activity patterns between weekdays and weekends? ##
+Add a new factor variable to our dataframe indicating whether it was weekday or weekend
+```{r}
+library(lubridate)
+activity_ext$date = ymd(activity_ext$date) # make a date object
 
+activity_ext$weekday = wday(activity_ext$date)
+indWeekend = (activity_ext$weekday== 7 |  activity_ext$weekday== 1)
+activity_ext$week_weekend[indWeekend] = "weekend"
+activity_ext$week_weekend[!indWeekend] = "week"
+activity_ext$week_weekend =as.factor(activity_ext$week_weekend)
+```
 
+Create panel plot with the average number of steps
+```{r}
+resQ5 <- activity_ext %>%
+  group_by(interval,week_weekend) %>%
+  summarize(avsteps = mean(steps,na.rm=TRUE))
 
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+qplot(interval,avsteps, data = resQ5,facets = .~week_weekend, ylab= "Average number of steps") + geom_line()
+```
